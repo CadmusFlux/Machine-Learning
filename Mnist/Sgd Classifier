@@ -1,0 +1,119 @@
+from sklearn.datasets import fetch_openml
+import matplotlib as mpl
+import matplotlib.pyplot as plt
+import numpy as np
+'''
+Importing Data
+'''
+mnist = fetch_openml('mnist_784', version=1)
+X, y = mnist["data"], mnist["target"]
+y = y.astype(np.uint8)
+X_train, X_test, y_train, y_test = X[:60000], X[60000:], y[:60000], y[60000:]
+
+'''
+    Plotting instances
+'''
+def plot_digit(data):
+    image = data.reshape(28, 28)
+    plt.imshow(image, cmap = mpl.cm.binary,
+               interpolation="nearest")
+    plt.axis("off")
+
+'''
+    Binary Classifier
+    Label for particular digit(Binary Classifier)
+'''
+y_train_5 = (y_train == 5)
+y_test_5 = (y_test == 5)
+
+'''
+    Training Stochastic Gradient Model:
+        parameters: training data, training label
+'''
+from sklearn.linear_model import SGDClassifier
+
+sgd_clf = SGDClassifier(max_iter=1000, tol=1e-3, random_state=42)
+sgd_clf.fit(X_train, y_train_5)
+
+'''
+    Cross validating Model By K-fold
+    Returns predicted labels
+'''
+from sklearn.model_selection import cross_val_predict
+
+y_train_pred = cross_val_predict(sgd_clf, X_train, y_train_5, cv=3)
+'''
+    Model effectiveness metrics
+'''
+from sklearn.metrics import precision_score, recall_score
+
+print(precision_score(y_train_5, y_train_pred))
+print(recall_score(y_train_5, y_train_pred))
+'''
+    f1_score is obtaine by taking harmonic mean of precison/recall
+'''
+
+from sklearn.metrics import f1_score
+
+print(f1_score(y_train_5, y_train_pred))
+
+'''
+    Rather than picking a random threshold here we use decison function and 
+    pick  a optimal threshold value from decision score.
+    y_scores stores decision scores(distance from hyperplane) of each
+    individual instance 
+'''
+y_scores = cross_val_predict(sgd_clf, X_train, y_train_5, cv=3,
+                             method="decision_function")
+'''
+    Curves are used to give us a visualization of how choosing a
+    particular threshold affects other parameters:
+    1) For pre/rec curve the parameters are precsion and recall
+    2) For  roc curve these parameters are Tpr(recall) and Fpr(1-specificuty)
+'''
+'''
+    Predicting threshold based on Precison/Recall
+    
+'''
+from sklearn.metrics import precision_recall_curve
+
+precisions, recalls, thresholds = precision_recall_curve(y_train_5,
+                                                         y_scores)
+'''
+For particular precision:
+        increasing precision affects recall
+        threshold_90_precison stores value of the minimum precison required 
+        for 90
+'''      
+threshold_90_precision = thresholds[np.argmax(precisions >= 0.90)]
+y_scores = (y_scores >=threshold_90_precision)#now y_score stores true false
+
+'''
+    Predicting threshold based on Tpr/Fpr
+    roc_auc_score outputs area under the curve
+   
+'''
+from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_auc_score
+
+fpr, tpr, thresholds = roc_curve(y_train_5, y_scores)
+print(roc_auc_score(y_train_5, y_scores))
+'''
+    Multi-Label Classification:
+    1) One vs One classifier : N classifiers
+    2) One vs Rest classifier : N * (N-1)/2
+    '
+'''
+some_digit = X[0]
+from sklearn.multiclass import OneVsOneClassifier
+from sklearn.model_selection import cross_val_score
+ovo_clf = OneVsOneClassifier(SGDClassifier(random_state=42))
+ovo_clf.fit(X_train, y_train)
+print(ovo_clf.predict([some_digit]))
+print(cross_val_score(sgd_clf, X_train, y_train, cv=3, scoring="accuracy"))
+
+from sklearn.multiclass import OneVsRestClassifier
+ovo_clf = OneVsRestClassifier(SGDClassifier(random_state=42))
+ovo_clf.fit(X_train, y_train)
+print(ovo_clf.predict([some_digit]))
+print(cross_val_score(sgd_clf, X_train, y_train, cv=3, scoring="accuracy"))
